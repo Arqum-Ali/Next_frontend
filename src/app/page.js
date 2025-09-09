@@ -11,39 +11,46 @@ export default function Page() {
   const [intervalId, setIntervalId] = useState(null);
   const [stream, setStream] = useState(null);
 
-  useEffect(() => {
-    if (typeof navigator === "undefined") return;
+ useEffect(() => {
+   if (typeof navigator === "undefined") return;
 
-    async function initCamera() {
-      try {
-        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+   async function initCamera() {
+     try {
+       const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+       const constraints = {
+         video: isMobile
+           ? { facingMode: "environment", width: 640, height: 480 }
+           : { width: 1280, height: 720 },
+       };
 
-        // Mobile uses back camera, laptop default
-        const constraints = {
-          video: isMobile ? { facingMode: "environment" } : true,
-        };
+       const mediaStream = await navigator.mediaDevices.getUserMedia(
+         constraints
+       );
+       setStream(mediaStream);
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-        setStream(mediaStream);
+       if (videoRef.current) {
+         videoRef.current.srcObject = mediaStream;
 
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-        }
+         // Wait for video to load metadata (dimensions)
+         videoRef.current.onloadedmetadata = () => {
+           canvasRef.current.width = videoRef.current.videoWidth;
+           canvasRef.current.height = videoRef.current.videoHeight;
 
-        // Start interval capture
-        const id = setInterval(() => {
-          captureImage(isMobile);
-        }, 5000);
-        setIntervalId(id);
-      } catch (err) {
-        console.error("Camera error:", err);
-      }
-    }
+           // Start interval capture after video ready
+           const id = setInterval(() => captureImage(isMobile), 5000);
+           setIntervalId(id);
+         };
+       }
+     } catch (err) {
+       console.error("Camera error:", err);
+     }
+   }
 
-    initCamera();
+   initCamera();
 
-    return () => stopCapture();
-  }, []);
+   return () => stopCapture();
+ }, []);
+
 
   const stopCapture = () => {
     if (intervalId) clearInterval(intervalId);
