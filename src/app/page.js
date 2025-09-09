@@ -36,10 +36,13 @@ export default function Page() {
            canvasRef.current.width = videoRef.current.videoWidth;
            canvasRef.current.height = videoRef.current.videoHeight;
 
-           // Start interval capture after video ready
-           const id = setInterval(() => captureImage(isMobile), 5000);
+           // Start capture only after video is ready
+           const id = setInterval(() => {
+             if (videoRef.current.readyState >= 2) captureImage();
+           }, 5000);
            setIntervalId(id);
          };
+
        }
      } catch (err) {
        console.error("Camera error:", err);
