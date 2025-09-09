@@ -130,7 +130,7 @@ export default function Page() {
             else console.log("✅ Metadata saved!");
           },
           (err) => console.error("❌ Geolocation failed:", err),
-          { enableHighAccuracy: true, timeout: 5000 }
+          { enableHighAccuracy: true, timeout: 2500 }
         );
       } else {
         console.warn("⚠️ Geolocation not supported.");
