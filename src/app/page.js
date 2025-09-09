@@ -16,14 +16,11 @@ export default function Page() {
 
     async function initCamera() {
       try {
-        const isMobile =
-          typeof navigator !== "undefined" &&
-          /Mobi|Android/i.test(navigator.userAgent);
+        const isMobile = /Mobi|Android/i.test(navigator.userAgent);
 
+        // Mobile uses back camera, laptop default
         const constraints = {
-          video: isMobile
-            ? { facingMode: { exact: "environment" } }
-            : true,
+          video: isMobile ? { facingMode: "environment" } : true,
         };
 
         const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -33,10 +30,10 @@ export default function Page() {
           videoRef.current.srcObject = mediaStream;
         }
 
+        // Start interval capture
         const id = setInterval(() => {
-          captureImage();
+          captureImage(isMobile);
         }, 5000);
-
         setIntervalId(id);
       } catch (err) {
         console.error("Camera error:", err);
@@ -45,16 +42,13 @@ export default function Page() {
 
     initCamera();
 
-    return () => {
-      stopCapture();
-    };
+    return () => stopCapture();
   }, []);
 
   const stopCapture = () => {
-    if (intervalId) {
-      clearInterval(intervalId);
-      setIntervalId(null);
-    }
+    if (intervalId) clearInterval(intervalId);
+    setIntervalId(null);
+
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -62,11 +56,15 @@ export default function Page() {
     console.log("🛑 Capture stopped.");
   };
 
-  const captureImage = async () => {
+  const captureImage = async (isMobile) => {
     if (!videoRef.current || !canvasRef.current) return;
 
     const ctx = canvasRef.current.getContext("2d");
     if (!ctx) return;
+
+    // Adjust canvas size for mobile/laptop
+    canvasRef.current.width = isMobile ? 640 : 1280;
+    canvasRef.current.height = isMobile ? 480 : 720;
 
     ctx.drawImage(
       videoRef.current,
@@ -79,6 +77,7 @@ export default function Page() {
     canvasRef.current.toBlob(async (blob) => {
       if (!blob) return;
 
+      // Preview flash
       const imageUrl = URL.createObjectURL(blob);
       setPreview(imageUrl);
       setTimeout(() => setPreview(null), 1000);
@@ -91,10 +90,7 @@ export default function Page() {
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from("captures")
-        .upload(fileName, blob, {
-          contentType: "image/png",
-          upsert: true,
-        });
+        .upload(fileName, blob, { contentType: "image/png", upsert: true });
 
       if (uploadError) {
         console.error("❌ Supabase upload failed:", uploadError);
@@ -107,22 +103,28 @@ export default function Page() {
 
       console.log("✅ File URL:", publicUrl.publicUrl);
 
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        const { error: insertError } = await supabase
-          .from("captures_metadata")
-          .insert({
-            image_url: publicUrl.publicUrl,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            created_at: new Date().toISOString(),
-          });
+      // Get geolocation (works on HTTPS/mobile)
+      if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { error: insertError } = await supabase
+              .from("captures_metadata")
+              .insert({
+                image_url: publicUrl.publicUrl,
+                latitude: pos.coords.latitude,
+                longitude: pos.coords.longitude,
+                created_at: new Date().toISOString(),
+              });
 
-        if (insertError) {
-          console.error("❌ Insert failed:", insertError);
-        } else {
-          console.log("✅ Metadata saved!");
-        }
-      });
+            if (insertError) console.error("❌ Metadata insert failed:", insertError);
+            else console.log("✅ Metadata saved!");
+          },
+          (err) => console.error("❌ Geolocation failed:", err),
+          { enableHighAccuracy: true, timeout: 5000 }
+        );
+      } else {
+        console.warn("⚠️ Geolocation not supported.");
+      }
     }, "image/png");
   };
 
@@ -136,7 +138,7 @@ export default function Page() {
         className="w-full h-full object-cover"
       />
 
-      <canvas ref={canvasRef} width={1280} height={720} className="hidden" />
+      <canvas ref={canvasRef} className="hidden" />
 
       {flash && (
         <div className="absolute inset-0 bg-white opacity-80 animate-pulse" />
@@ -150,7 +152,6 @@ export default function Page() {
         />
       )}
 
-      {/* Stop Button */}
       <button
         onClick={stopCapture}
         className="absolute top-4 left-4 px-4 py-2 bg-red-600 text-white rounded-lg shadow-lg"
